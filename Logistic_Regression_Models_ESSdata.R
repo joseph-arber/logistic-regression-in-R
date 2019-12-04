@@ -14,13 +14,10 @@ library(texreg)
 library(foreign)
 
 #EDA of ESS dataset
-str(ess)
-summary(ess)
+ str(ess)
+  summary(ess)
 dim(ess)
-names(ess)
-
-library(ggplot2)
-ggplot(ess,aes(x = leave, y = years_education, color = unemployed)) + geom_jitter(alpha = 0.5)
+  names(ess)
 
 #How clean is the data?
 head(ess,15)
@@ -45,6 +42,11 @@ table(ess$unemployed)
 ess$unemployed <-factor(ess$unemployed, levels = c(FALSE,TRUE), labels =c("Employed", "Unemployed"))
 summary(ess$unemployed)
 class(ess$trade_union)
+
+#Visualization
+library(ggplot2)
+  ggplot(ess,aes(x = years_education, y = leave, color = unemployed)) + 
+    geom_jitter(width = 0, height = 0.09, alpha = 0.5)
 
 #Take a look at the level of country attachment  
 str(ess$country_attach)
