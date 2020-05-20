@@ -1,4 +1,4 @@
-What influences voter preferences in European elections?
+# What influences voter preferences in European elections?
 
 There are a number of factors influencing voter habits of Europeans. These factors are determined by political, economic and social variables. For instance, does membership in a trade-union influence a voters decision to vote in favour of increased European integration. Or are certain ethnic groups more inclined to vote in one way rather than another.
 
