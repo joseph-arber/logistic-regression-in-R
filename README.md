@@ -4,8 +4,5 @@ There are a number of factors influencing voter habits of Europeans. These facto
 
 The logistic models programmed here attempt to illuminate the main variables in voter decision making. The preliminary results provided by the logistic regression models were used to make predictions about the way in which voters are likley to vote in future eureopean elections. 
 
-
-
-
-
+The final project is available in this repo. 
 
