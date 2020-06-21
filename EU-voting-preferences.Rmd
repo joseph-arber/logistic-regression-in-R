@@ -1,0 +1,478 @@
+---
+title: "EU-voter-preferences"
+author: "Joseph Arber"
+date: "21/06/2020"
+output: 
+  html_document:
+    theme: cosmo
+    highlight: tango
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# What determines support for the European Union?
+
+## Introduction
+
+In the aftermath of the UK public’s vote to leave the EU in the 2016 referendum, much attention has been paid to whether support for the EU varies predictably across different types of individuals. In this question, you will use an appropriate binary dependent variable model to improve our understanding of which types of citizens are more or less likely to vote to leave the European Union if a referendum on membership were to be held in their country.
+
+The data for this question comes from the 2016 European Social Survey (ESS) and includes information on the political attitudes and demographics of European citizens. 
+
+The question given to survey particpants was: "Imagine there were a referendum in your country tomorrow about membership of the European Union. Would you vote for your country to remain a member of the European Union or to leave the European Union?"
+
+```{r Package dependencies}
+#Important packages for analysis and modelling
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(texreg)
+library(foreign)
+library(ggplot2)
+#library(glmnet)
+#library(hrbrthemes)
+library(kableExtra)
+options(knitr.table.format = "html")
+library(patchwork)
+```
+### Loading the Data
+Above we have loaded the required packages for this analysis. We can now load in the data:
+```{r load data, message=FALSE}
+library(readr)
+ess <- read_csv("data/ess.csv")
+```
+
+
+### Data Manipulation
+
+We need to complete some data wrangling. There are several variables that should be converted into factor variables, this will aid the regression modelling later on, but will also provide clearer labels for the categories within the features.
+
+```{r Data manipulation}
+#Variable coercion
+str(ess$trade_union)
+table(ess$trade_union)
+
+#Turn trade union into a factor variable
+ess$trade_union <-factor(ess$trade_union, levels = c(0,1), labels = c("Non-Member", "Member"))
+summary(ess$trade_union)
+class(ess$trade_union)
+
+#Variable coercion 
+str(ess$unemployed)
+table(ess$unemployed)
+
+#Turn unemployed into a factory variable
+ess$unemployed <-factor(ess$unemployed, levels = c(FALSE,TRUE), labels =c("Employed", "Unemployed"))
+summary(ess$unemployed)
+class(ess$unemployed)
+
+```
+
+There are a total of **12557** respondents who are employed, whilst there are only **500** who are unemployed. On the other hand there are around 50000 trade union members compared to 80000 non-members. We should remember these insights for the following analysis. 
+
+
+```{r More data manipulation}
+
+#Take a look at the level of country attachment  
+str(ess$country_attach)
+summary(ess$country_attach)
+
+#Let's sequence the country attachment variable
+attach_country<-seq(0,10, length.out = 100)
+summary(ess$country_attach)
+str(ess$country_attach)
+
+#Take a look at the leave variable
+str(ess$leave)
+table(ess$leave)
+
+#Coerce leave into a factor variable
+ess$leave <- factor(ess$leave, levels =c(0,1), labels = c("no","yes"))
+summary(ess$leave)
+
+table(ess$leave)
+str(ess$leave)
+```
+
+We used the 'seq' generator function in R, it is useful for creating proportional sequences with a given length. The rationale for doing this is that we will be able to draw more insighful conclusions by spreading the variable over a length of 100 rather than 10. The package is referenced here:
+
+https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/seq
+
+By coercing the leave variable into a factor variable we can see that amount of people that would vote to leave was around **2308** whilst **10767** would vote to remain. 
+
+
+
+### Exploratory Analysis & Visualization
+
+What is the vote split in the dataset?
+```{r Visualization 1}
+library(ggplot2)
+ggplot(data = ess, aes(x = leave)) +
+    geom_bar()
+
+```
+
+Let's try to segment the main demographic groups in the dataset. This should help us in the later modelling phases. 
+
+#### Religion and the European Union
+
+We will look at the categories in the religion feature.
+
+**Religious segmentations**
+```{r}
+table(ess$religion)
+```
+Including an 'Other' category, there are 5 major religions. Lets now examine which religious groups across Europe are more opposed to the EU as an institution.
+
+```{r Segmenting by Voter Preference}
+
+leave_vote <- ess %>%
+  filter(leave == "yes")
+
+leave_vote
+
+#plot to see which religions are more opposed to the EU.
+library(ggplot2)
+ggplot(data = leave_vote, aes(x = religion, fill = religion)) +
+    geom_bar() 
+```
+
+Generally **Muslims** and **Jews** are more supportive of the EU, whilst **Roman Catholics** are more opposed. Let's look at voting preferences within a religious segmentation. To do this we have to create a bucket that contains the values for all Muslims who particpated in the survey. We use the pipe operator to do this,
+
+```{r Exploratory Analysis: Islam}
+Islamic_view <- ess %>%
+  filter(religion == "Islamic") 
+
+Islamic_view
+```
+
+Now lets visualise the split in voter preferences for Muslims.
+
+```{r Visualization of Islam}
+library(ggplot2)
+ggplot(data = Islamic_view, aes(x = leave, y = "Islamic")) +
+    geom_col() + ggtitle("Voter Preferences for Muslims") + xlab("Vote to Leave") + ylab("Count") 
+```
+
+We are going to do exactly the same process as did above for the Catholic segementation.
+
+```{r Exploratory Analysis: Catholic}
+Catholic_view <- ess %>%
+  filter(religion == "Roman Catholic") 
+
+Catholic_view
+```
+
+```{r Visualization: Catholic}
+library(ggplot2)
+ggplot(data = Catholic_view, aes(x = leave, y = "Roman Catholic")) +
+    geom_col() + ggtitle("Voter Preferences for Catholics") + xlab("Vote to Leave") + ylab("Count") 
+```
+
+#### Gender and the European Union 
+
+After exploring the relgious groups views on Europe, it is worth considering if there is any variation between genders. 
+
+```{r}
+ggplot(data = ess, aes(x = leave, y = gender, col = gender)) +
+geom_col() + ggtitle("Voter Preferences by Gender") + xlab("Vote to Leave") + ylab("Count") 
+```
+
+Not much variation.
+
+We will now analyse some of the other featurs in this dataset. Lets take a quick look at the dataset to remind ourselves of these features.
+
+```{r}
+colnames(ess)
+```
+
+
+```{r}
+grey_theme <- theme(axis.text.x = element_text(colour="grey20", size = 12, 
+                                               angle = 90, hjust = 0.5, 
+                                               vjust = 0.5),
+                    axis.text.y = element_text(colour = "grey20", size = 12),
+                    text=element_text(size = 16))
+
+ggplot(ess, aes(x = years_education, y = news_consumption)) + geom_point() + grey_theme + geom_jitter(alpha = 0.3) 
+```
+#### More Visualization
+Let's do some more plotting. We should be able to compare leave votes by trade union membership and employment status.
+
+```{r Exploratory Visualisation}
+#Leave by employment status
+ggplot(data = ess, aes(x = unemployed, y = leave)) +
+  geom_col()
+
+#Visualization 2
+library(ggplot2)
+  ggplot(ess,aes(x = years_education, y = leave, color = unemployed)) + 
+    geom_jitter(width = 0, height = 0.09, alpha = 0.7)
+
+```
+
+
+```{r}
+#Member of trade union?
+ggplot(data = ess, aes(x = trade_union, y = leave)) +
+  geom_col()
+```
+
+
+### Data Partition
+Using the caret package we will split the data into training and test sets. 
+```{r}
+#load caret package
+library(caret)
+#set the random seed 
+set.seed(123)
+#perform train test split
+training.samples <- ess$leave %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- ess[training.samples, ]
+test.data <- ess[-training.samples, ]
+
+head(train.data)
+```
+
+
+## Modelling
+Lets see what features are the best predictors of EU voter preferences. We will first test trade union membership as a predictor in voting leave in EU elections.
+
+Throughout the modelling we will specify the ```family``` argument as ```binomial```. This is because we are trying to predict the odds of an event taking place. Binomial logistic regression is a particular type of logistic regression in which  the dependent variable y is a discrete random variable that takes on values such as 0, 1, 5, 67 etc. Each value represents the number of ‘successes’ observed in m trials. Thus y follows the binomial distribution.
+
+
+### Model 1: Voter preferences by membership of trade union
+
+```{r}
+#Logistic Regression Modelliing
+library(aod)
+#Model 1
+logit_M1 <- glm(leave ~ trade_union + years_education + country_attach + eu_integration, data = train.data, family = binomial(link = "logit"))
+screenreg(logit_M1)
+summary(logit_M1)
+```
+```{r}
+probabilities <- logit_M1 %>% predict(test.data, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+#predicted.classes
+#mean(predicted.classes==test.data$leave)
+```
+
+
+#### Model 1: Results and Evaluation
+
+The first logistic regression model produced some interesting results. We can conclude that trade union membership is positively correlated with a decision to vote to leave in the EU survey. This would support Coulter (2016) who argues that trade unions as interest groups, particuarly in the UK have tended to be more sceptical of EU integration. 
+
+Paper: http://eprints.lse.ac.uk/68929/1/LEQSPaper121Coulter.pdf
+
+We now run confidence interval tests on the model. Note that for logistic models, confidence intervals are based on the profiled log-likelihood function. We can also get CIs based on just the standard errors by using the default method.
+
+```{r}
+#Confidence intervals
+confint(logit_M1)
+
+#Confidence intervals with standard error
+confint.default(logit_M1)
+```
+
+We can also test for an overall effect of rank using the wald.test function of the aod library. The order in which the coefficients are given in the table of coefficients is the same as the order of the terms in the model. This is important because the wald.test function refers to the coefficients by their order in the model. We use the wald.test function. b supplies the coefficients, while Sigma supplies the variance covariance matrix of the error terms.
+
+```{r}
+#Wald test
+library(car)
+Anova(logit_M1, type="II", test="Wald")
+```
+
+The results from the wald/chi-square tests would suggest that predictor feature variables are indeed significant. We can now proceed to the next stages of the modelling. 
+
+### Model 2: Voter preferences by employment status
+
+For this model we will play particular attention to news consumption levels and how this interacts with trust for politicians and emotional attachment to a country.
+
+```{r}
+#Model 2
+logit_M2 <- glm(leave ~ unemployed + country_attach + news_consumption + trust_politicians, data = train.data, family = binomial(link = "logit"))
+summary(logit_M2)
+screenreg(logit_M2)
+```
+The feature variable unemployed is associated with a 0.10% increase in the likelihood of voting leave. However, the variable is not significant. Lets take a look at the confidence intervals for the model.
+
+#### Model 2: Results and Evaluation
+
+```{r}
+#Confidence intervals
+confint(logit_M2)
+
+#Confidence intervals with standard error
+confint.default(logit_M2)
+```
+
+
+```{r}
+#Wald test
+library(aod)
+wald.test(b = coef(logit_M2), Sigma = vcov(logit_M1), Terms = 1:4)
+```
+
+
+### Full Logistic Regression Model
+
+Let's programme a full logistic regression that tests all the predictors. 
+```{r}
+full.model <- glm(leave ~., data = train.data, family = binomial)
+coef(full.model)
+```
+
+Country code seems to be highly correlated. Lets remove it from the dataset and try again.
+```{r}
+train.data1 = train.data[!grepl("^country_code",names(train.data))]
+colnames(train.data1)
+```
+
+We run the full model again.
+```{r}
+full.model <- glm(leave ~., data = train.data1, family = binomial)
+coef(full.model)
+```
+
+#### Perform stepwise variable selection
+Select the most contributive variables:
+```{r}
+library(MASS)
+step.model <- full.model %>% stepAIC(trace = FALSE)
+coef(step.model)
+```
+
+There are a number of variables that seem to be highly correlated with the voting preferences. In particular, years education, concerns about the economic impact of immigration and concerns about the cultural impact of immigration.  Indeed, an ongoing academic discussion focusses on whether cultural or economic concerns about immigration are more important as predictors of support for the European Union.
+
+### Model 3: Likelihood to vote leave by attitudes towards immigration 
+```{r}
+logit_M3 <- glm(leave ~ immig_econ + immig_culture, data = train.data, family = binomial(link = "logit"))
+summary(logit_M3)
+screenreg(logit_M3)
+```
+
+#### Model 3: Results and Evaluation
+```{r}
+#Confidence intervals
+confint(logit_M3)
+
+#Confidence intervals with standard error
+confint.default(logit_M3)
+```
+
+### Model 4: Voter preferences by number of years of education and EU integration level
+```{r}
+logit_M4 <- glm(leave ~ years_education + eu_integration, data = train.data, family = binomial(link = "logit"))
+summary(logit_M4)
+screenreg(logit_M4)
+```
+
+#### Model 4: Results and Evaluation
+```{r}
+#Confidence intervals
+confint(logit_M4)
+
+#Confidence intervals with standard error
+confint.default(logit_M4)
+```
+
+### Model 5: Voter preferences by number of years of education and attachment to the country
+```{r}
+logit_M5 <- glm(leave ~ years_education + country_attach, data = train.data, family = binomial(link = "logit"))
+summary(logit_M5)
+screenreg(logit_M5)
+```
+
+## Predicted Probablities
+```{r}
+#FitStatistics
+mean(train.data$leave)
+summary(train.data$leave)
+
+#Fitted Values and Predicted Probabilities    
+train.data$pps1 <- predict(logit_M1, newdata = train.data, type = "response")
+train.data$evs1 <- ifelse(train.data$pps1 > 0.5, yes = 1, no = 0)
+```
+
+### Confusion Matrix: Model Accuracy
+```{r}
+#Confusion matrix to find model fit - actual outcomes
+confusion <- table(actual = train.data$leave, expected.value = train.data$evs1)
+confusion #Expected values for leave and remain 
+
+sum(diag(confusion)) / sum(confusion)
+```
+
+Our model succesfully predicted with 82% accuracy. 
+
+```{r}
+#Likelihood to vote 'leave'; EU integration and 13 years of education
+eu_integration_0<- predict(
+  logit_M4,
+  newdata = data.frame(years_education = 10, eu_integration = 5),
+  type = "response"
+)
+eu_integration_0
+
+#ikelihood to vote 'leave'; EU integration and 20 years of education
+eu_integration_10<- predict(
+  logit_M4,
+  newdata = data.frame(years_education = 20, eu_integration = 5),
+  type = "response"
+)
+eu_integration_10 
+```
+
+Liklihood to vote leave is 10% given education at university level compared to around 17% with 10 years of education. However, it is clear the feature, eu_integration is far a more signficant predictor in to vote leave.
+
+**Attachment to country by years of education**
+
+```{r}
+#Predicted probabilities of voting leave for those who a strongly attatched to their country  
+country_attatchment1 <- predict(logit_M5,
+  newdata = data.frame(country_attach = 10, years_education = 20),
+  type = "response"
+)
+country_attatchment1
+```
+There is a 10% chance of voting to leave with 20 years of education and high attachment to the country.
+```{r}
+country_attatchment2 <- predict(logit_M5,
+  newdata = data.frame(country_attach = 10, years_education = 13),
+  type = "response"
+)
+country_attatchment2#Those less emotionally attatched more likley to vote to remain
+#Difference between the predicted probabilities
+country_attatchment1 - country_attatchment2
+```
+On the other hand for those who have had less education but a strongly attached the country there is a 15% chance of voting to leave.
+
+### Plots
+```{r}
+#Sequence years education 
+years_education_profiles <- data.frame(years_education = seq(from = 0, to = 54, by = .5),eu_integration = 0)
+head(years_education_profiles)
+#create a new dataframe for years education profiles
+years_education_profiles$predicted_probs <- predict(logit_M4, newdata = years_education_profiles, type = "response")
+```
+Lets now plot the relationship between years education and voter preferences.
+```{r}
+#Plot 1: Voting Leave by Years of Education:
+ggplot(years_education_profiles, aes(x = years_education, y = predicted_probs)) + 
+  geom_line(alpha = 0.5) + ylab("Probability of Voting Leave") + xlab("Number of Year of Education") + ggtitle("Voting Leave by Years of Education")
+```
+
+Plot the standardized residuals for the full model.
+```{r}
+plot(fitted(full.model),
+     rstandard(full.model))
+```
+
+### Conclusion: Findings and Future Work
+
+The analysis above shows the complexity in predicting attitudes towards politics in general. With that said we can make some kind of conclusion that years of education and attitudes toward immigration are strong predictors of attitudes towards the EU. Going forward it would be interesting to see if we could predict which way a respondent would vote based on one or two features. We could use classification algorithms such as MNB or SVM.
